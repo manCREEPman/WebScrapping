@@ -1,0 +1,7 @@
+bs4
+requests
+selenium
+webdriver_manager
+chromedriver_autoinstaller
+flask
+sqlalchemy

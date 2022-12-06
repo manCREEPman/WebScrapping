@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Статьи</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<style type="text/css">
+    li
+    {
+        padding: 8px 8px;
+        border: 1px solid black;
+
+    }
+
+    ul
+    {   margin: 20;
+        padding: 0;
+        list-style-type: none;
+        background: #e8edf1;
+        width: 30%;
+    }
+
+</style>
+
+<body>
+
+<ul>
+    {%for x in info%}
+        <li> <a href="/{{x[0]}}"> {{x[1]}} </a></li>
+    {%endfor%}
+</ul>
+</body>
+</html>
