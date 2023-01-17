@@ -1,39 +1,54 @@
-import sqlalchemy
-from sqlalchemy import func
-from sqlalchemy.orm import Session
-import json
+import sqlite3
 
 
-def createSession():
-
-    tmp_dict = json.load(open('./privates.json', encoding='utf-8'))
-    login = tmp_dict['bd_login']
-    psw = tmp_dict['bd_psw']
-    host = tmp_dict['bd_host']
-
-    engine = sqlalchemy.create_engine(f"postgresql+psycopg2://{login}:{psw}@{host}/Papers")
-    session = Session(bind=engine)
-
-    return session
+def createConnectionCursor():
+    sqlite_connection = sqlite3.connect('./db/data.db')
+    cursor = sqlite_connection.cursor()
+    return sqlite_connection, cursor
 
 
-def insertInfo(info):
-    session = createSession()
+def insertInfo(info: dict):
+    connection, cursor = createConnectionCursor()
 
-    sql = f"""Select pInsert('{info['title']}', '{info['author']}', '{info['annotation']}', '{info['url']}', '{info['paper_text']}'); """
+    sql = f'select count(*) from papers where url = \'{info["url"]}\''
 
-    e = session.execute(sql)
+    cursor.execute(sql)
+    count = cursor.fetchone()[0]
+    if count == 0:
+        sql = f'''
+            insert into papers(title, author, annotation, paper_text, url, type) 
+            values('{info["title"]}', '{info["author"]}', '{info["annotation"]}', '{info["paper_text"]}', '{info["url"]}', null)
+        '''
 
-    session.commit()
-    session.close()
+        cursor.execute(sql)
+        connection.commit()
+    cursor.close()
 
-    return e.first()[0]
 
-def getInfo(sql):
+def updateInfo(id: int, type: int):
+    connection, cursor = createConnectionCursor()
 
-    session = createSession()
+    sql = f'update papers set type = {type} where id = {id}'
 
-    e = session.execute(sql)
-    session.close()
+    cursor.execute(sql)
+    connection.commit()
+    cursor.close()
 
-    return e.fetchall()
+
+def getDBInfo(where_statement:str=''):
+    connection, cursor = createConnectionCursor()
+
+    sql = f'select id, paper_text, type from papers' + ' ' + where_statement # + ' limit 2'
+    cursor.execute(sql)
+    results = cursor.fetchall()
+    cursor.close()
+    return results
+
+
+def setTypeNulls():
+    connection, cursor = createConnectionCursor()
+
+    sql = 'update papers set type = null'
+    cursor.execute(sql)
+    connection.commit()
+    cursor.close()

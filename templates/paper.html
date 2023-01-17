@@ -2,21 +2,45 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title> {{info[1]}} </title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@300&display=swap" rel="stylesheet">
+    <link rel= "stylesheet" type= "text/css" href= "{{ url_for('static', filename='style.css') }}">
+    <title> {{ info.title }} </title>
 </head>
-<body>
-    <a href="/">Назад</a>
-    <br><br>
 
-    <h2>{{info[1]}}</h2>
-    <p>Автор: <a href="{{info[-2]}}">{{info[2]}}</a></p>
-    <p>Соответствует теме магистерской: <b>"{{info[-1]}}"</b></p>
-    <br>
-    <h3>Аннотация</h3>
-    <p>{{info[3]}}</p>
-    <br>
-    <h3>Статья</h3>
-    <p>{{info[-3]}}</p>
+<style>
+    a {
+        text-decoration: underline; 
+        color: rgb(82, 82, 245);
+    }
+
+    .main {
+        margin: 10px;
+    }
+</style>
+
+<body>
+    <div class="main">
+        <a href="/">Назад</a>
+        <br><br>
+    
+        <h2>{{ info.title }}</h2>
+        <p>Автор: <a href="{{ info.url }}">{{ info.author }}</a></p>
+        <p>Соответствует теме магистерской: 
+            {% if info.type == 1 %}
+                <b>+</b>
+            {% else %}
+                <b>—</b>
+            {% endif %}
+        </p>
+        <br>
+        <h3>Аннотация</h3>
+        <p>{{ info.annotation }}</p>
+        <br>
+        <h3>Статья</h3>
+        <p>{{ info.paper_text }}</p>
+    </div>
 
 </body>
 </html>

@@ -1,20 +1,21 @@
-import os
 from bs4 import BeautifulSoup
 import requests
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
-from webdriver_manager.chrome import ChromeDriverManager
 import chromedriver_autoinstaller as chromedriver
 import time
-import db.DBOperations
+from db.DBOperations import insertInfo, updateInfo, getDBInfo
+from classificator import classification_process
 
 
 elibrary = "https://www.elibrary.ru"
 habr = "https://habr.com"
 wink = "https://wink.ru"
 maddevs = "https://maddevs.io"
+sciencedirect = "https://www.sciencedirect.com"
+neurohive = "https://neurohive.io"
 
 
 def set_headers():
@@ -46,7 +47,6 @@ def parse_habr(url):
 
 
     info = {}
-    article_count = 0
     for article in allArticles:
         info['title'] = article.find('a', class_='tm-article-snippet__title-link').find('span').text
         info['author'] = article.find('a', class_='tm-user-info__userpic').get('title')
@@ -65,50 +65,12 @@ def parse_habr(url):
         info['paper_text'] = text if len(text) > 0 else info['paper_text'].find('div', xmlns = 'http://www.w3.org/1999/xhtml').text
         info['paper_text'] = info['paper_text'].replace("'", "''")
 
-        # if db.DBOperations.insertInfo(info): article_count += 1
-        # else: break
-        print(info)
+        # вставка в БД
+        insertInfo(info)
 
     habr_end = time.time()
     habr_time = habr_end - habr_start
     return habr_time
-
-
-def parse_wink(url):
-    wink_start = time.time()
-
-    soup = get_soup(get_req(url).content)
-
-    allBooks = soup.find_all('div', class_='item_itubtxt')
-
-    info = {}
-
-    article_count = 0
-    for book in allBooks:
-
-        info['title'] = book.find('h4', class_ = 'root_r1lbxtse title_tyrtgqg root_subtitle2_r3qime3').text
-        title =  info['title'].split('. ')
-        title_split = ". ".join(title[i] for i in range(len(title)-1) )
-        if len(title_split) > 0:
-            info['title'] = title_split
-        else:
-            title = info['title'].split("! ")
-            info['title'] = ". ".join(title[i] for i in range(len(title)-1) )
-
-        info['author'] = title[-1]
-        info['url'] = wink + book.find('a').get('href')
-
-        item_page = get_soup(get_req(info['url']).content)
-        info['paper_text'] = item_page.find('p', class_ = 'root_r1lbxtse text_t1gefzhn root_body1_rjqy0lg').text.replace("'", "''")
-        info['annotation'] = item_page.find_all('a', class_ = 'root_rwxlfxa root_hover_rwzvnfy')
-        info['annotation'] = ", ".join(x.text for x in info['annotation']).replace("'", "''")
-
-
-
-    wink_end = time.time()
-    wink_time = wink_end - wink_start
-
-    return wink_time
 
 
 def parse_maddevs(url):
@@ -158,67 +120,99 @@ def parse_maddevs(url):
 
     return maddevs_time
 
-def update_info():
 
+def update_info():
     update_start = time.time()
 
-    path = r"C:\my_files\dz\_univer\_маг_Методы_извлечения_информации_из_сетевых_источников\lab3\out\artifacts\proj1_jar\proj1.jar"
-    os.system(f"java -cp {path} db.Main")
+    rows = classification_process(getDBInfo('where type is null'))
+    # tuple(id, paper_text, type)
+    for row in rows:
+        updateInfo(row[0], row[2])
 
+    rows = getDBInfo('where type is null')
     update_end = time.time()
-
     update_time = update_end - update_start
-
     return update_time
 
 
-def execute():
-    t1 = parse_habr('https://habr.com/ru/search/?q=%D1%82%D1%80%D0%B5%D1%85%D0%BC%D0%B5%D1%80%D0%BD%D1%8B%D0%B5%20%D1%81%D0%B2%D0%B5%D1%80%D1%82%D0%BE%D1%87%D0%BD%D1%8B%D0%B5%20%D0%BD%D0%B5%D0%B9%D1%80%D0%BE%D0%BD%D0%BD%D1%8B%D0%B5%20%D1%81%D0%B5%D1%82%D0%B8&&target_type=posts&order=date')
-    t2 = parse_wink('https://wink.ru/collections/audioknigi')
-    t3 = parse_maddevs('https://maddevs.io/tag/software-development/')
-    t4 = update_info()
+def parse_neuralhive(url):
+    update_start = time.time()
+    soup = get_soup(get_req(url).content)
+    for article in soup.find_all('article'):
+        info = dict()
+        a_title = article.find('a', attrs={'rel': 'bookmark'})
+        annotation_div = article.find('div', class_='entry-summary')
+        
+        info['title'] = a_title.text
+        info['url'] = a_title['href']
+        info['annotation'] = annotation_div.text
 
-def parse_elibrary():
-    data = []
+        article_soup = get_soup(get_req(info['url']).content)
 
-    # выполняем поиск
+        text_section = article_soup.find('section')
+        
+        info['author'] = article_soup.find('div', class_='author-header').find('a').text
+        info['paper_text'] = "\n\t".join(x.text for x in text_section.find_all(['p', 'ul', 'ol']))
+
+        # вставка в БД
+        insertInfo(info)
+    update_end = time.time()
+
+    return update_end - update_start
+
+
+def parse_sciencedirect(url):
+    update_start = time.time()
     options = Options()
-    options.headless = True
-    browser = webdriver.Chrome(chromedriver.install(), options=options)
-    browser.get('https://www.elibrary.ru/querybox.asp?scope=newquery')
-    textarea = browser.find_element(By.TAG_NAME, 'textarea')
-    textarea.clear()
-    textarea.send_keys(u"трехмерные сверточные нейронные сети")
-    time.sleep(2)
-    go_button = browser.find_element(By.XPATH, '//a[text() = "Поиск"]')    
-    go_button.click()
-    time.sleep(7)
+    page = webdriver.Chrome(chromedriver.install(), options=options)
+    page.get(url)
+    time.sleep(5)
+    soup = get_soup(page.page_source)
+    article_ol = soup.find('ol', class_='article-list-items')
+    for li in article_ol.find_all('li', class_='js-article-list-item'):
+        info = dict()
+        a_li = li.find('dt').find('a')
+        info['title'] = a_li.text
+        info['url'] = sciencedirect + a_li['href']
+        info['author'] = li.find('dd', class_='js-article-author-list').text
 
-    # подготовка к парсингу
-    link_list = get_soup(browser)
-    main_table = link_list.find(id="restab")
-    table_body = main_table.findChild('tbody')
 
-    # проходимся по каждому результату поиска
-    for row in table_body.findChildren('tr'):
-        if row.get('id', None) is not None:
-            try:
-                td = row.getChild('td')
-                div = td.getChild('div')
-                a = div.getChild('a')
+        another_page = webdriver.Chrome(chromedriver.install(), options=Options())
+        another_page.get(info['url'])
+        time.sleep(5)
 
-                # в случае, когда доступен весь текст - открываем новую вкладку
-                if a.get('title', None) == 'Доступ к полному тексту открыт':
-                    paper_td = row.find(attrs={"valign": "top"})
-                    td_div = paper_td.getChild('div')
-                    td_a = td_div.getChild('a')
-                    paper_soup = get_soup(get_selenium_req(td_a['href']).page_source)
-                    # обработка внутренностей статьи
+        article_soup = get_soup(another_page.page_source)
+        text_section = article_soup.find('article')
 
-            except:
-                continue
+        abstract = text_section.find('div', class_='abstract')
+        introduction = text_section.find('div', attrs={'id': 'preview-section-introduction'})
+        snippets = text_section.find('div', attrs={'id': 'preview-section-snippets'})
 
-# execute()
-# parse_elibrary()
-# parse_habr()
-parse_maddevs("https://maddevs.io/tag/software-development/")
+        info['annotation'] = "\n\t".join(x.text for x in abstract.find_all(['p', 'ul', 'ol']))
+        info['paper_text'] = "\n\t".join(x.text for x in introduction.find_all(['p', 'ul', 'ol'])) \
+            + "\n\t".join(x.text for x in snippets.find_all(['p', 'ul', 'ol']))
+
+        insertInfo(info)
+    update_end = time.time()
+
+    return update_end - update_start
+
+
+def execute():
+    user_answer = input('Хотите выполнить полный парсинг? y/n').lower()
+    while user_answer not in {'y', 'n'}:
+        user_answer = input('Хотите выполнить полный парсинг? y/n').lower()
+
+    if user_answer == 'y':
+        t1 = parse_habr('https://habr.com/ru/search/?q=%D1%82%D1%80%D0%B5%D1%85%D0%BC%D0%B5%D1%80%D0%BD%D1%8B%D0%B5%20%D1%81%D0%B2%D0%B5%D1%80%D1%82%D0%BE%D1%87%D0%BD%D1%8B%D0%B5%20%D0%BD%D0%B5%D0%B9%D1%80%D0%BE%D0%BD%D0%BD%D1%8B%D0%B5%20%D1%81%D0%B5%D1%82%D0%B8&&target_type=posts&order=date')
+        print(f'Парсинг habr занял {t1} сек')
+        t2 = parse_neuralhive('https://neurohive.io/ru/tutorial/')
+        print(f'Парсинг neuralhive занял {t2} сек')
+        t3 = parse_sciencedirect('https://www.sciencedirect.com/journal/neural-networks/articles-in-press')
+        print(f'Парсинг sciencedirect занял {t3} сек')
+    
+    t4 = update_info()
+    print(f'Классификация завершена за {t4} сек')
+
+
+execute()
